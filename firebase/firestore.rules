@@ -1,0 +1,89 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function teacher() {
+      return signedIn() && request.auth.token.email_verified == true
+        && get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role in ['teacher', 'admin'];
+    }
+    function validQuiz(data, id) {
+      return data.keys().hasOnly(['id','file','title','description','subject','difficulty','durationMinutes','questionCount','points','openCount','choiceCount','ownerId','ownerName','status','sizeBytes','createdAt','updatedAt'])
+        && data.id == id && id.matches('cloud-[A-Za-z0-9_-]{10,90}')
+        && data.file == id + '.quiz.json'
+        && data.ownerId == request.auth.uid
+        && data.ownerName is string && data.ownerName.size() <= 100
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 150
+        && data.description is string && data.description.size() <= 1500
+        && data.subject is string && data.subject.size() <= 60
+        && data.difficulty is string && data.difficulty.size() <= 40
+        && data.status in ['draft','published']
+        && data.durationMinutes is number && data.durationMinutes >= 0 && data.durationMinutes <= 1440
+        && data.questionCount is int && data.questionCount > 0 && data.questionCount <= 500
+        && data.openCount is int && data.openCount >= 0
+        && data.choiceCount is int && data.choiceCount >= 0
+        && data.openCount + data.choiceCount == data.questionCount
+        && data.points is number && data.points > 0 && data.points <= 500000
+        && data.sizeBytes is int && data.sizeBytes > 0 && data.sizeBytes <= 900000
+        && data.createdAt is timestamp && data.updatedAt == request.time;
+    }
+    match /roles/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      // Grant roles through Firebase Console or a trusted Admin SDK, never the website.
+      allow list, create, update, delete: if false;
+    }
+    match /quizzes/{id} {
+      allow get: if resource == null || resource.data.status == 'published'
+        || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow list: if resource.data.status == 'published'
+        || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow create: if teacher() && validQuiz(request.resource.data,id)
+        && request.resource.data.createdAt == request.time;
+      allow update: if teacher() && resource.data.ownerId == request.auth.uid
+        && validQuiz(request.resource.data,id)
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if teacher() && resource.data.ownerId == request.auth.uid;
+    }
+    match /quizzes/{id}/content/{fileId} {
+      function readable() {
+        let quiz = get(/databases/$(database)/documents/quizzes/$(id));
+        return quiz.data.status == 'published' || (signedIn() && quiz.data.ownerId == request.auth.uid);
+      }
+      function writable() {
+        let quiz = getAfter(/databases/$(database)/documents/quizzes/$(id));
+        return teacher() && quiz.data.ownerId == request.auth.uid && quiz.data.updatedAt == request.time;
+      }
+      allow get: if fileId == 'main' && readable();
+      allow create, update: if fileId == 'main' && writable()
+        && request.resource.data.keys().hasOnly(['json','updatedAt'])
+        && request.resource.data.json is string && request.resource.data.json.size() > 0
+        && request.resource.data.json.size() <= 900000
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if teacher() && get(/databases/$(database)/documents/quizzes/$(id)).data.ownerId == request.auth.uid;
+    }
+    match /users/{uid}/attempts/{id} {
+      function owner() { return signedIn() && request.auth.uid == uid; }
+      function validResult(data) {
+        return data.keys().hasOnly(['quizId','quizTitle','attemptId','startedAt','submittedAt','timedOut','timeTakenSeconds','score','possible','correct','incorrect','skipped','pending','partial','answers','manualScores','answersOmitted','updatedAt'])
+          && data.attemptId == id && data.quizId is string && data.quizId.size() <= 100
+          && data.quizTitle is string && data.quizTitle.size() <= 150
+          && data.startedAt is number && data.submittedAt is number && data.submittedAt >= data.startedAt
+          && data.timeTakenSeconds is number && data.timeTakenSeconds >= 0
+          && data.timedOut is bool && data.answersOmitted is bool
+          && data.possible is number && data.possible > 0 && data.possible <= 500000
+          && data.score is number && data.score >= -500000 && data.score <= data.possible
+          && data.correct is int && data.correct >= 0
+          && data.incorrect is int && data.incorrect >= 0
+          && data.skipped is int && data.skipped >= 0
+          && data.pending is int && data.pending >= 0
+          && data.partial is int && data.partial >= 0
+          && data.correct + data.incorrect + data.skipped + data.pending + data.partial <= 500
+          && data.answers is map && data.answers.size() <= 500
+          && data.manualScores is map && data.manualScores.size() <= 500
+          && data.updatedAt == request.time;
+      }
+      allow read, delete: if owner();
+      allow create, update: if owner() && validResult(request.resource.data);
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

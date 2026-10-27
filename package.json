@@ -1,0 +1,16 @@
+{
+  "name": "axiom-quiz",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A file-based mathematics quiz studio for GitHub Pages.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "start": "node scripts/catalog.mjs && node scripts/serve.mjs",
+    "catalog": "node scripts/catalog.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#10243d" />
+    <title>Quiz room · Math quizzes</title>
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./assets/app.css" />
+    <script defer src="./js/math-config.js"></script>
+    <script defer src="./assets/mathjax.js"></script>
+    <script type="module" src="./js/quiz.js"></script>
+  </head>
+  <body class="quiz-body">
+    <a class="skip-link" href="#quiz-app">Skip to quiz</a>
+    <header class="quiz-header" id="quiz-header"></header>
+    <main id="quiz-app" class="quiz-app">
+      <div class="loading-state">
+        <span class="spinner"></span>Loading quiz…
+      </div>
+    </main>
+  </body>
+</html>
